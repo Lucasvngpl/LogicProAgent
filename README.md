@@ -1,6 +1,6 @@
 # 🎵 Logic Pro Voice Agent
 
-Control Logic Pro with your voice while recording. No more interrupting your creative flow to click buttons!
+Control Logic Pro with your voice while recording. No more interrupting your creative flow to click buttons! I wanted to build something that breaks down the barrier of entry for beginners picking up Logic Pro like I once did, by making the interaction with the GUI voice enabled and conversational.
 
 ## What It Does
 
@@ -12,7 +12,9 @@ Say natural commands like:
 - "Add reverb to track 2" (coming soon)
 - "Load a piano" (coming soon)
 
-The agent uses AI vision to understand Logic Pro's interface and clicks the right buttons for you.
+The agent uses AI vision to understand Logic Pro's interface and clicks the right buttons for you by perceiving screen states through
+screenshots and executing atomic actions such as clicking, typing, and scrolling, these agents, inspired by the paper 'OmegaUse: Building a General-Purpose GUI Agent
+for Autonomous Task Execution'
 
 ## Why?
 
@@ -81,18 +83,5 @@ Uses Claude Vision API:
 - ~$0.15 per command
 - ~$3 per recording session (20 commands)
 
-## Learn More
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture, learning concepts, and development guide.
-
-## Contributing
-
-This is a learning project! Contributions, experiments, and improvements welcome.
-
-## License
-
-MIT
-
----
-
-**Built with:** Claude AI, Python, PyAutoGUI, and a love for music production 🎶
+**Building with:** Claude AI, Python, PyAutoGUI, and a love for music production 🎶
