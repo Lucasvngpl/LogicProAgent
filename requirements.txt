@@ -1,19 +1,27 @@
-# Core dependencies
-anthropic>=0.40.0
-pillow>=10.0.0
+# Vision - Local GUI understanding (Qwen2.5-VL-7B on Apple Silicon)
+mlx-vlm>=0.4.0
+
+# GUI automation
 pyautogui>=0.9.54
+pillow>=10.0.0
 
-# Voice input (optional - choose one or both)
-SpeechRecognition>=3.10.0
-# openai-whisper>=20231117  # Uncomment if you want local Whisper
+# Voice input - Local speech-to-text
+faster-whisper>=1.0.0
 
-# macOS-specific (optional enhancements)
-pyobjc-framework-Quartz>=10.0  # Better screen capture
+# Voice output - Text-to-speech
+elevenlabs>=1.0.0
+
+# Audio recording
+sounddevice>=0.4.6
+numpy>=1.21.0
+
+# macOS-specific (better screen capture)
+pyobjc-framework-Quartz>=10.0
 pyobjc-framework-CoreGraphics>=10.0
 
 # Development
 pytest>=7.4.0
-python-dotenv>=1.0.0  # For managing API keys
+python-dotenv>=1.0.0
 
 # Utilities
 requests>=2.31.0

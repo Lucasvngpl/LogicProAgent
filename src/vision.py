@@ -1,33 +1,57 @@
 """
-Claude Vision API integration for understanding Logic Pro UI.
+Local Vision Model integration for understanding Logic Pro UI.
+
+Uses Qwen2.5-VL-7B running locally via mlx-vlm on Apple Silicon.
+No API costs — the model runs entirely on your Mac.
 
 LEARNING GOALS:
-- Learn how to call the Anthropic Claude API
-- Understand vision model capabilities
+- Learn how to run vision-language models locally
+- Understand MLX framework for Apple Silicon inference
 - Practice prompt engineering for GUI understanding
-- Handle API responses and errors
+- Handle model loading and image preprocessing
 """
 
-from anthropic import Anthropic
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import json
+from PIL import Image
+import io
+import base64
+
+# Local model inference on Apple Silicon
+# pip install mlx-vlm
+# First run will download the model (~4-5GB)
+from mlx_vlm import load, generate
+from mlx_vlm.prompt_utils import apply_chat_template
+from mlx_vlm.utils import load_config
+
+
+# Model to use — Qwen2.5-VL-7B is best for GUI understanding on 16GB RAM
+MODEL_NAME = "mlx-community/Qwen2.5-VL-7B-Instruct-4bit"
 
 
 class VisionAnalyzer:
-    """Uses Claude Vision to understand Logic Pro interface."""
+    """Uses a local Qwen2.5-VL model to understand Logic Pro interface."""
 
-    def __init__(self, api_key: str):
+    def __init__(self):
         """
-        Initialize the vision analyzer.
+        Initialize the vision analyzer with local model.
 
         TODO: Implement this
         Hints:
-        - Create Anthropic client with api_key
-        - Store it as self.client
+        - Use load() from mlx_vlm to load model and processor
+        - load() returns (model, processor) tuple
+        - Store as self.model and self.processor
+        - Also load config with load_config() for chat template
+        - First run downloads the model (~4-5GB), subsequent runs are instant
+        - Print a message so user knows model is loading
 
-        Args:
-            api_key: Anthropic API key
+        Example:
+            self.model, self.processor = load(MODEL_NAME)
+            self.config = load_config(MODEL_NAME)
         """
+        print(f"Loading vision model: {MODEL_NAME}")
+        print("(First run will download ~4-5GB, this is a one-time setup)")
+        # TODO: Your implementation here
         pass
 
     def analyze_ui_for_command(
@@ -42,26 +66,24 @@ class VisionAnalyzer:
         This is the CORE of the project!
 
         Hints:
-        - Use self.client.messages.create()
-        - Model: "claude-opus-4-6" (most capable for vision)
-        - Max tokens: ~1000 should be enough
-        - Message content should include:
-          1. The image (type: "image", source with base64 data)
-          2. The prompt (type: "text")
+        - Decode the base64 screenshot back to a PIL Image
+        - Build a prompt asking the model to find UI elements
+        - Use apply_chat_template() to format the prompt with the image
+        - Use generate() to run inference
+        - Parse the JSON response
 
-        Prompt engineering tips:
-        - Be specific about what you need
-        - Ask for JSON format response
-        - Request coordinates (x, y) for clicks
+        Prompt engineering tips for Qwen2.5-VL:
+        - Be specific: "Find the play button in this Logic Pro screenshot"
+        - Ask for JSON format with coordinates
+        - Request (x, y) pixel coordinates for clicks
         - Ask for step-by-step actions if multi-step
-        - Include context about Logic Pro
 
-        Example prompt structure:
+        Example prompt:
         '''
         You are analyzing a Logic Pro interface screenshot.
         The user wants to: "{user_command}"
 
-        Analyze the interface and return a JSON response with:
+        Find the UI element(s) needed and return a JSON response:
         {{
           "steps": [
             {{
@@ -72,11 +94,20 @@ class VisionAnalyzer:
               "description": "Click the play button"
             }}
           ],
-          "reasoning": "Explanation of what you're doing"
+          "reasoning": "Explanation of what you found"
         }}
 
-        Be precise with coordinates.
+        Return ONLY valid JSON, no other text.
         '''
+
+        To generate a response:
+            formatted = apply_chat_template(
+                self.processor, self.config, prompt, num_images=1
+            )
+            response = generate(
+                self.model, self.processor, formatted,
+                images=[image], max_tokens=500, verbose=False
+            )
 
         Args:
             screenshot_base64: Base64 encoded screenshot
@@ -88,23 +119,44 @@ class VisionAnalyzer:
         # TODO: Your implementation here
         pass
 
-    def parse_response(self, response) -> Dict:
+    def _decode_base64_image(self, base64_string: str) -> Image.Image:
         """
-        Parse Claude's API response into structured actions.
+        Decode a base64 string back to a PIL Image.
+
+        TODO: Implement this helper
+        Hints:
+        - Use base64.b64decode() to get bytes
+        - Wrap in io.BytesIO()
+        - Open with Image.open()
+
+        Args:
+            base64_string: Base64 encoded image
+
+        Returns:
+            PIL Image object
+        """
+        # TODO: Your implementation here
+        pass
+
+    def parse_response(self, response_text: str) -> Dict:
+        """
+        Parse the model's text response into structured actions.
 
         TODO: Implement this
         Hints:
-        - Extract text content from response
-        - Parse JSON if it's JSON
-        - Handle errors gracefully
-        - Return a dict with 'steps' list
+        - The model should return JSON, but sometimes adds extra text
+        - Try json.loads() first
+        - If that fails, try to find JSON in the response (look for { and })
+        - Handle errors gracefully — return empty steps if parsing fails
+        - Return a dict with 'steps' list and 'reasoning' string
 
         Args:
-            response: Raw API response from Claude
+            response_text: Raw text response from model
 
         Returns:
             Parsed dict with actions
         """
+        # TODO: Your implementation here
         pass
 
 
@@ -114,17 +166,20 @@ def test_vision():
     Test the vision analyzer.
 
     TODO: Implement this test
-    - You'll need an API key
-    - You'll need a screenshot
+    - Create VisionAnalyzer (will load model)
+    - Take a screenshot or load a test image
     - Try analyzing for command "play"
     - Print the results
+
+    Note: First run will download ~4-5GB model!
     """
     print("Testing vision analyzer...")
-
-    # Get API key from environment or hardcode for testing
-    api_key = "your-api-key-here"  # TODO: Load from environment
+    print("This will download the Qwen2.5-VL model on first run.")
 
     # TODO: Your test code here
+    # analyzer = VisionAnalyzer()
+    # result = analyzer.analyze_ui_for_command(screenshot_b64, "play")
+    # print(result)
 
 
 if __name__ == "__main__":

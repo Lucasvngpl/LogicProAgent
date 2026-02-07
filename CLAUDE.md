@@ -19,16 +19,18 @@ Voice commands → Vision-based GUI understanding → Automated cursor control
 
 ## Architecture
 
-### Zero-Shot Vision Approach
+### Zero-Shot Vision Approach (100% Local, Free)
 
 ```
-┌─────────────┐
-│ Voice Input │  (speech_recognition + Whisper)
-└──────┬──────┘
+┌──────────────────┐
+│   Voice Input    │  (faster-whisper, local Whisper base.en)
+│   "Hey Logic,    │
+│    hit record"   │
+└──────┬───────────┘
        │
        ▼
 ┌─────────────────┐
-│ Intent Parsing  │  (simple NLU, later: Claude/LLM)
+│ Intent Parsing  │  (keyword matching + NLU)
 └──────┬──────────┘
        │
        ▼
@@ -37,31 +39,40 @@ Voice commands → Vision-based GUI understanding → Automated cursor control
 └──────┬──────────┘
        │
        ▼
-┌─────────────────────┐
-│ Claude Vision API   │  (Understand UI, find elements)
-└──────┬──────────────┘
+┌──────────────────────────┐
+│ Local Vision Model       │  (Qwen2.5-VL-7B via mlx-vlm)
+│ Runs on Apple Silicon    │  (No API, no internet, no cost)
+└──────┬───────────────────┘
        │
        ▼
 ┌─────────────────┐
-│ Action Planning │  (Parse Claude's response)
+│ Action Planning │  (Parse model's JSON response)
 └──────┬──────────┘
        │
        ▼
 ┌─────────────────┐
 │ Cursor Control  │  (PyAutoGUI - move & click)
-└─────────────────┘
+└──────┬──────────┘
+       │
+       ▼
+┌──────────────────────┐
+│ Voice Response       │  (ElevenLabs free tier / macOS say)
+│ "Sure Lucas,         │
+│  starting recording" │
+└──────────────────────┘
 ```
 
 ### Why Zero-Shot?
-- **No training data needed** - Claude Vision already understands UIs
+- **No training data needed** - Qwen2.5-VL already understands UIs
 - **Fast to build** - Start prototyping immediately
 - **Adaptable** - Works even when Logic Pro UI changes
 - **Learning-friendly** - Can see each step working
+- **Free** - All models run locally on your Mac
 
 **Trade-offs:**
 - Slower (~3-5 seconds per command) vs trained model (<1 second)
-- API costs (~$0.10-0.30 per command)
-- Requires internet connection
+- First run downloads models (~4-5GB for vision, ~150MB for Whisper)
+- Requires 16GB+ RAM for Qwen2.5-VL-7B
 
 For a recording session (10-50 commands), this is totally acceptable.
 
@@ -71,14 +82,17 @@ For a recording session (10-50 commands), this is totally acceptable.
 
 ### Core Dependencies
 - **Python 3.9+** - Main language
-- **anthropic** - Claude API for vision understanding
+- **mlx-vlm** - Local vision model inference on Apple Silicon (Qwen2.5-VL-7B)
+- **faster-whisper** - Local speech-to-text (Whisper base.en model)
+- **elevenlabs** - Text-to-speech for agent responses (free tier: 10k chars/month)
 - **pyautogui** - Cross-platform cursor control and screenshots
 - **pillow** - Image processing
-- **speech_recognition** - Voice input
-- **openai-whisper** - Speech-to-text (optional, can use Google/macOS)
+- **sounddevice** - Microphone audio recording
+- **numpy** - Audio processing
 
 ### macOS-Specific
 - **Quartz/CoreGraphics** - Better window capture (optional)
+- **macOS `say` command** - Free TTS fallback (no internet needed)
 - **pyobjc** - macOS Accessibility API (future enhancement)
 
 ---
@@ -93,12 +107,13 @@ LogicProAgent/
 │
 ├── src/
 │   ├── __init__.py
-│   ├── main.py           # Entry point
-│   ├── voice_input.py    # Speech recognition
-│   ├── vision.py         # Claude Vision integration
-│   ├── screen_capture.py # Screenshot utilities
-│   ├── cursor_control.py # PyAutoGUI wrapper
-│   └── commands.py       # Command definitions
+│   ├── main.py            # Entry point + agent loop
+│   ├── voice_input.py     # faster-whisper speech-to-text
+│   ├── text_to_speech.py  # ElevenLabs TTS + macOS say fallback
+│   ├── vision.py          # Qwen2.5-VL-7B local vision (mlx-vlm)
+│   ├── screen_capture.py  # Screenshot utilities
+│   ├── cursor_control.py  # PyAutoGUI wrapper
+│   └── commands.py        # Command definitions
 │
 ├── tests/
 │   ├── test_voice.py
@@ -250,11 +265,11 @@ LogicProAgent/
 ## Getting Started
 
 ### Prerequisites
-1. **macOS** (Logic Pro is macOS-only)
+1. **macOS with Apple Silicon** (M1/M2/M3/M4, 16GB+ RAM)
 2. **Logic Pro installed** (trial or full version)
 3. **Python 3.9+** installed
-4. **Anthropic API key** (get from https://console.anthropic.com/)
-5. **Microphone** for voice input
+4. **Microphone** for voice input
+5. **ElevenLabs API key** (optional, free at https://elevenlabs.io/ — falls back to macOS `say`)
 
 ### Quick Start
 
@@ -269,15 +284,20 @@ source venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Set up API key
-export ANTHROPIC_API_KEY='your-api-key-here'
+# 4. (Optional) Set up ElevenLabs for premium voice responses
+export ELEVENLABS_API_KEY='your-key-here'  # Or skip — macOS say works fine
 
 # 5. Run basic test
+# First run downloads vision model (~4-5GB) + Whisper model (~150MB)
 python src/main.py --test-mode
 
 # 6. Try first command
 # (Open Logic Pro first!)
 python src/main.py --command "play"
+
+# 7. Voice mode
+python src/main.py --voice
+# Say: "Hey Logic, hit record"
 ```
 
 ---
@@ -285,21 +305,18 @@ python src/main.py --command "play"
 ## Example Usage
 
 ```python
-from logic_agent import LogicProAgent
+from main import LogicProAgent
 
-# Initialize agent
-agent = LogicProAgent(api_key="your-key")
+# Initialize agent (no API key needed — all models run locally!)
+agent = LogicProAgent()
 
 # Execute a command
-agent.execute("play")
-agent.execute("record")
-agent.execute("stop")
+agent.execute_command("play")
+agent.execute_command("record")
+agent.execute_command("stop")
 
-# Multi-step command
-agent.execute("add reverb to track 2")
-
-# Voice mode
-agent.start_listening()  # Now just speak commands
+# Voice mode — speak commands hands-free
+agent.voice_loop()  # Say "Hey Logic, play" etc.
 ```
 
 ---
@@ -312,7 +329,7 @@ agent.start_listening()  # Now just speak commands
 3. Verify it works visually
 
 ### Automated Testing
-- Mock Claude API responses
+- Mock vision model responses
 - Test coordinate parsing
 - Test action sequences
 - Integration tests with screenshots
@@ -327,11 +344,12 @@ agent.start_listening()  # Now just speak commands
 
 ## Common Pitfalls & Solutions
 
-### Issue: Claude Vision returns wrong coordinates
+### Issue: Vision model returns wrong coordinates
 **Solution:**
 - Provide better context in prompt
 - Show previous successful examples
 - Ask for step-by-step reasoning
+- Try a larger model (Qwen2.5-VL-32B) if 7B isn't accurate enough
 
 ### Issue: Commands execute too fast
 **Solution:**
@@ -377,38 +395,40 @@ agent.start_listening()  # Now just speak commands
 
 ## Cost Estimates
 
-### API Costs (Claude Opus 4.6)
-- Input: ~$15 per million tokens
-- Output: ~$75 per million tokens
+### All Local Models — $0 per command!
+- **Vision (Qwen2.5-VL-7B):** Free, runs locally
+- **STT (faster-whisper):** Free, runs locally
+- **TTS (ElevenLabs free tier):** 10,000 chars/month free (~5 sessions)
+- **TTS fallback (macOS say):** Free, unlimited, offline
 
-**Per command estimate:**
-- Screenshot: ~1500 tokens (image)
-- Prompt: ~200 tokens (text)
-- Response: ~100 tokens (JSON)
-- **Total: ~$0.15 per command**
+**Per session: $0** (vs ~$3.00 with Claude Vision API)
 
-**Typical session:**
-- 20 commands per recording session
-- **~$3.00 per session**
+### One-Time Setup Costs
+- Vision model download: ~4-5GB
+- Whisper model download: ~150MB
+- That's it!
 
-### Optimization Ideas
-- Use Claude Haiku for simple commands ($0.03/command)
-- Cache common UI elements
-- Batch multiple commands if possible
-- Use keyboard shortcuts instead of clicks (no vision needed)
+### ElevenLabs Free Tier Budget
+- 10,000 characters/month
+- Average response: ~30 characters
+- ~330 responses/month = ~6-7 sessions of 50 commands
+- If you need more: macOS `say` fallback is always available
 
 ---
 
 ## Resources
 
 ### Documentation
-- [Anthropic Claude API](https://docs.anthropic.com/)
+- [mlx-vlm (Vision Models on Mac)](https://github.com/Blaizzy/mlx-vlm)
+- [Qwen2.5-VL](https://github.com/QwenLM/Qwen2.5-VL)
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+- [ElevenLabs Python SDK](https://github.com/elevenlabs/elevenlabs-python)
 - [PyAutoGUI Docs](https://pyautogui.readthedocs.io/)
-- [Speech Recognition](https://github.com/Recognizers/speech_recognition)
 
 ### Inspiration
 - OmegaUse paper: GUI agents with vision models
 - [Anthropic Computer Use](https://docs.anthropic.com/en/docs/build-with-claude/computer-use)
+- [ShowUI](https://github.com/showlab/computer_use_ootb) - GUI agent with vision models
 - Open Interpreter project
 
 ### Community
@@ -443,7 +463,10 @@ This is a learning project! Feel free to:
 - **Zero-shot over training:** Prioritizes speed of development and learning
 - **Python over Swift:** Cross-platform, better AI libraries, easier for beginners
 - **Vision over AppleScript:** Logic Pro has no comprehensive scripting support
-- **Claude Opus over smaller models:** Accuracy > speed for this use case
+- **Local models over APIs:** $0 cost, no internet needed, privacy-friendly
+- **Qwen2.5-VL-7B:** Best accuracy for GUI understanding on 16GB Mac
+- **faster-whisper over openai-whisper:** 4x faster, same accuracy
+- **ElevenLabs + macOS say:** Premium voice when available, free fallback always
 
 ### User's Goals:
 - Learn about AI agents and GUI automation
@@ -454,5 +477,5 @@ This is a learning project! Feel free to:
 ---
 
 **Last Updated:** 2026-02-07
-**Status:** Phase 1 - Initial Setup
-**Next Step:** Create basic project structure and test Claude Vision API
+**Status:** Phase 1 - Skeleton code with local model stack
+**Next Step:** Implement the TODO methods in each file, starting with vision.py
