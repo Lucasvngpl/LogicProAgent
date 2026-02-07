@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# API Keys and secrets
+.env
+*.key
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+data/screenshots/*
+!data/screenshots/.gitkeep
+
+# OS
+.DS_Store

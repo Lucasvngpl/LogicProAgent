@@ -1,0 +1,19 @@
+# Core dependencies
+anthropic>=0.40.0
+pillow>=10.0.0
+pyautogui>=0.9.54
+
+# Voice input (optional - choose one or both)
+SpeechRecognition>=3.10.0
+# openai-whisper>=20231117  # Uncomment if you want local Whisper
+
+# macOS-specific (optional enhancements)
+pyobjc-framework-Quartz>=10.0  # Better screen capture
+pyobjc-framework-CoreGraphics>=10.0
+
+# Development
+pytest>=7.4.0
+python-dotenv>=1.0.0  # For managing API keys
+
+# Utilities
+requests>=2.31.0
