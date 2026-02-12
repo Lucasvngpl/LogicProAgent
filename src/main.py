@@ -37,7 +37,7 @@ class LogicProAgent:
           - CursorController
           - CommandProcessor
           - VoiceInput (loads local Whisper model)
-          - TextToSpeech (tries ElevenLabs, falls back to macOS say)
+          - TextToSpeech (OpenAI TTS)
         - Store them as instance variables
         - Print status messages as each component loads
 
@@ -140,7 +140,7 @@ def main():
        --voice           → voice mode (continuous listening)
 
     Environment variables to set:
-    - ELEVENLABS_API_KEY  → for premium TTS (optional, falls back to macOS say)
+    - OPENAI_API_KEY  → for STT and TTS
     """
 
     # TODO: Set up argument parser
@@ -165,7 +165,7 @@ def main():
     print("\nStack (all free, all local):")
     print("  Vision:  Qwen2.5-VL-7B via mlx-vlm")
     print("  STT:     faster-whisper (base.en)")
-    print("  TTS:     ElevenLabs free tier + macOS say fallback")
+    print("  TTS:     OpenAI gpt-4o-mini-tts")
 
 
 if __name__ == "__main__":

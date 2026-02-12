@@ -1,169 +1,167 @@
 """
-Voice input using faster-whisper for local speech-to-text.
+Voice input using OpenAI Realtime API with built-in VAD.
 
-Runs Whisper locally on your Mac — no API costs, no internet needed.
-Uses the 'base.en' model (best speed/accuracy tradeoff for short commands).
+How it works:
+1. Opens a WebSocket to OpenAI's Realtime API
+2. Streams microphone audio continuously
+3. OpenAI's server VAD detects when you start/stop talking
+4. Sends back transcription only when speech is detected
+5. We check for "Hey Logic" and extract the command
+
+No local VAD model needed -- OpenAI handles speech detection server-side.
 
 LEARNING GOALS:
-- Understand speech-to-text processing
-- Learn audio recording with sounddevice
+- Understand WebSocket streaming for real-time audio
+- Learn OpenAI's Realtime API for transcription
 - Practice wake word detection
 - Handle real-time audio input
 """
 
+import os
+import json
+import base64
+import threading
 import numpy as np
 import sounddevice as sd
-import tempfile
-import wave
-import os
 from typing import Optional
+import websocket
 
-# Local Whisper inference — 4x faster than openai-whisper
-# pip install faster-whisper
-from faster_whisper import WhisperModel
-
-# Model size — 'base.en' is ideal for short voice commands
-# Options: tiny.en (fastest), base.en (recommended), small.en (more accurate)
-WHISPER_MODEL = "base.en"
-
-# Audio settings
-SAMPLE_RATE = 16000  # Whisper expects 16kHz audio
-CHANNELS = 1         # Mono audio
+# Audio settings — Realtime API requires 24kHz mono PCM16
+SAMPLE_RATE = 24000
+CHANNELS = 1
 
 # Wake word — say this before your command
 WAKE_WORD = "hey logic"
 
+# Realtime API endpoint
+REALTIME_URL = "wss://api.openai.com/v1/realtime"
+REALTIME_MODEL = "gpt-4o-mini-transcribe"
+
 
 class VoiceInput:
-    """Handles voice input using local Whisper model."""
+    """Handles voice input using OpenAI Realtime API with server-side VAD."""
 
-    def __init__(self, model_size: str = WHISPER_MODEL):
+    def __init__(self):
         """
-        Initialize voice input with local Whisper model.
+        Initialize voice input.
 
         TODO: Implement this
         Hints:
-        - Create WhisperModel with model_size
-        - Use device="cpu" and compute_type="float32" for Mac
-        - Store as self.model
-        - Also store sample rate and other config
+        - Get API key from OPENAI_API_KEY env var
+        - Store it for WebSocket auth header
+        - Initialize a variable to hold the latest transcription
 
         Example:
-            self.model = WhisperModel(
-                model_size, device="cpu", compute_type="float32"
-            )
-
-        Args:
-            model_size: Whisper model to use (default: "base.en")
+            self.api_key = os.environ.get("OPENAI_API_KEY")
+            if not self.api_key:
+                raise ValueError("OPENAI_API_KEY environment variable not set")
+            self.latest_transcript = None
+            self._ws = None
+            self._running = False
         """
-        print(f"Loading Whisper model: {model_size}")
+        print("Initializing OpenAI Realtime voice input...")
         # TODO: Your implementation here
         pass
 
-    def record_audio(self, duration: float = 5.0) -> np.ndarray:
+    def _create_session_config(self) -> dict:
         """
-        Record audio from microphone for a fixed duration.
+        Create the session configuration for transcription + server VAD.
 
         TODO: Implement this
         Hints:
-        - Use sounddevice.rec() to record
-        - Parameters: frames = int(duration * SAMPLE_RATE)
-        - Use samplerate=SAMPLE_RATE, channels=CHANNELS
-        - dtype='float32'
-        - Call sd.wait() to block until recording is done
-        - Return the audio array
+        - Return a session.update event that configures:
+          - Transcription model (gpt-4o-mini-transcribe)
+          - Server VAD with threshold 0.5 and 1 second silence duration
+          - 24kHz PCM audio input format
 
         Example:
-            audio = sd.rec(
-                int(duration * SAMPLE_RATE),
-                samplerate=SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype='float32'
-            )
-            sd.wait()
-            return audio.flatten()
-
-        Args:
-            duration: How long to record in seconds
-
-        Returns:
-            Numpy array of audio samples
-        """
-        # TODO: Your implementation here
-        pass
-
-    def record_until_silence(
-        self,
-        silence_threshold: float = 0.01,
-        silence_duration: float = 1.5,
-        max_duration: float = 10.0
-    ) -> np.ndarray:
-        """
-        Record audio until silence is detected.
-
-        TODO: Implement this (ADVANCED)
-        Hints:
-        - Record in small chunks (e.g., 0.5 seconds)
-        - Check if the chunk's volume is below silence_threshold
-        - If silence lasts >= silence_duration, stop recording
-        - Stop after max_duration regardless
-        - Concatenate all chunks with np.concatenate()
-
-        This is trickier than fixed-duration recording!
-        Start with record_audio() first, then try this.
-
-        Args:
-            silence_threshold: Volume level that counts as silence
-            silence_duration: How long silence must last to stop (seconds)
-            max_duration: Maximum recording time (seconds)
-
-        Returns:
-            Numpy array of audio samples
-        """
-        # TODO: Your implementation here (start with record_audio first)
-        pass
-
-    def transcribe(self, audio: np.ndarray) -> str:
-        """
-        Transcribe audio using local Whisper model.
-
-        TODO: Implement this
-        Hints:
-        - Save audio to a temp WAV file (Whisper needs a file path)
-        - Use self.model.transcribe(temp_file_path)
-        - transcribe() returns (segments, info)
-        - Join all segment texts together
-        - Clean up the temp file
-        - Return the transcribed text
-
-        Example:
-            segments, info = self.model.transcribe(audio_path)
-            text = " ".join([seg.text for seg in segments])
-            return text.strip()
-
-        Args:
-            audio: Numpy array of audio samples
-
-        Returns:
-            Transcribed text string
+            return {
+                "type": "session.update",
+                "session": {
+                    "input_audio_transcription": {
+                        "model": REALTIME_MODEL,
+                    },
+                    "turn_detection": {
+                        "type": "server_vad",
+                        "threshold": 0.5,
+                        "silence_duration_ms": 1000,
+                        "prefix_padding_ms": 300,
+                    },
+                }
+            }
         """
         # TODO: Your implementation here
         pass
 
-    def _save_audio_to_wav(self, audio: np.ndarray, path: str):
+    def _on_message(self, ws, message):
         """
-        Save numpy audio array to WAV file.
+        Handle incoming WebSocket messages from OpenAI.
 
-        TODO: Implement this helper
+        TODO: Implement this
         Hints:
-        - Use the wave module
-        - Convert float32 audio to int16 (multiply by 32767)
-        - Write with wave.open(path, 'w')
-        - Set params: nchannels=1, sampwidth=2, framerate=SAMPLE_RATE
+        - Parse the JSON message
+        - Look for "conversation.item.input_audio_transcription.completed" events
+        - Extract the "transcript" field
+        - Store it in self.latest_transcript
+        - Close the WebSocket so listen_for_command() returns
 
-        Args:
-            audio: Numpy audio array (float32, -1 to 1)
-            path: Where to save the WAV file
+        Example:
+            data = json.loads(message)
+            if data.get("type") == "conversation.item.input_audio_transcription.completed":
+                self.latest_transcript = data.get("transcript", "")
+                print(f"  Heard: {self.latest_transcript}")
+                self._running = False
+                ws.close()
+        """
+        # TODO: Your implementation here
+        pass
+
+    def _on_open(self, ws):
+        """
+        Called when WebSocket connects. Send session config and start streaming mic.
+
+        TODO: Implement this
+        Hints:
+        - Send the session config
+        - Start a background thread that reads mic audio and sends it
+
+        Example:
+            ws.send(json.dumps(self._create_session_config()))
+            self._mic_thread = threading.Thread(target=self._stream_mic, args=(ws,))
+            self._mic_thread.daemon = True
+            self._mic_thread.start()
+        """
+        # TODO: Your implementation here
+        pass
+
+    def _stream_mic(self, ws):
+        """
+        Continuously read mic audio and send to OpenAI via WebSocket.
+
+        TODO: Implement this
+        Hints:
+        - Use sd.InputStream to read audio chunks
+        - Record as int16 (PCM16) directly — that's what Realtime API expects
+        - Base64-encode the bytes (WebSocket needs text)
+        - Send as input_audio_buffer.append event
+        - Use a block size of ~4800 samples (200ms at 24kHz)
+
+        Example:
+            block_size = 4800  # 200ms at 24kHz
+            with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                                dtype='int16', blocksize=block_size) as stream:
+                while self._running:
+                    audio_data, _ = stream.read(block_size)
+                    audio_bytes = audio_data.tobytes()
+                    b64_audio = base64.b64encode(audio_bytes).decode('utf-8')
+                    event = {
+                        "type": "input_audio_buffer.append",
+                        "audio": b64_audio,
+                    }
+                    try:
+                        ws.send(json.dumps(event))
+                    except:
+                        break
         """
         # TODO: Your implementation here
         pass
@@ -174,14 +172,14 @@ class VoiceInput:
 
         TODO: Implement this
         Hints:
-        - Check if text.lower() starts with or contains WAKE_WORD
+        - Check if text.lower() contains WAKE_WORD
         - If found, return everything after the wake word
         - If not found, return None
 
         Example:
-            "hey logic play" → "play"
-            "hey logic hit record" → "hit record"
-            "what time is it" → None
+            "hey logic play" -> "play"
+            "hey logic open chromaverb" -> "open chromaverb"
+            "testing one two" -> None
 
         Args:
             text: Transcribed text to check
@@ -192,21 +190,39 @@ class VoiceInput:
         # TODO: Your implementation here
         pass
 
-    def listen_for_command(self, duration: float = 5.0) -> Optional[str]:
+    def listen_for_command(self) -> Optional[str]:
         """
-        Listen for a voice command (record + transcribe + check wake word).
+        Connect to Realtime API and wait for next voice command.
+
+        This is the main method that main.py calls in a loop.
 
         TODO: Implement this
         Hints:
-        - Call record_audio() or record_until_silence()
-        - Call transcribe() on the audio
-        - Call check_wake_word() on the text
-        - Return the command or None
+        - Reset self.latest_transcript to None
+        - Set self._running = True
+        - Connect WebSocket with auth headers
+        - run_forever() blocks until ws.close() is called (from _on_message)
+        - After it returns, check wake word in the transcript
 
-        This is the main method that main.py will call.
+        Example:
+            self.latest_transcript = None
+            self._running = True
+            url = f"{REALTIME_URL}?model={REALTIME_MODEL}"
+            ws = websocket.WebSocketApp(
+                url,
+                header=[
+                    f"Authorization: Bearer {self.api_key}",
+                    "OpenAI-Beta: realtime=v1",
+                ],
+                on_open=self._on_open,
+                on_message=self._on_message,
+                on_error=lambda ws, e: print(f"  WebSocket error: {e}"),
+            )
+            ws.run_forever()
 
-        Args:
-            duration: How long to listen
+            if self.latest_transcript:
+                return self.check_wake_word(self.latest_transcript)
+            return None
 
         Returns:
             Command text or None if no wake word detected
@@ -214,28 +230,38 @@ class VoiceInput:
         # TODO: Your implementation here
         pass
 
+    def stop(self):
+        """Stop listening and close WebSocket."""
+        self._running = False
+        if self._ws:
+            self._ws.close()
+
 
 def test_voice():
     """
     Test voice input.
 
     TODO: Implement this test
-    - Create VoiceInput
-    - Record a few seconds of audio
-    - Transcribe it
-    - Print the result
-    - Try saying "Hey Logic play" and check wake word detection
+    - Create VoiceInput (needs OPENAI_API_KEY env var)
+    - Call listen_for_command() in a loop
+    - Say "Hey Logic play" and verify it returns "play"
     """
-    print("Testing voice input...")
-    print("Speak into your microphone after the beep!")
+    print("Testing voice input with OpenAI Realtime API...")
+    print("Say 'Hey Logic' followed by a command.")
+    print("Press Ctrl+C to stop.\n")
 
     # TODO: Your test code here
     # voice = VoiceInput()
-    # audio = voice.record_audio(duration=5.0)
-    # text = voice.transcribe(audio)
-    # print(f"You said: {text}")
-    # command = voice.check_wake_word(text)
-    # print(f"Command: {command}")
+    # while True:
+    #     try:
+    #         print("Listening...")
+    #         command = voice.listen_for_command()
+    #         if command:
+    #             print(f"Command: {command}")
+    #     except KeyboardInterrupt:
+    #         voice.stop()
+    #         print("\nDone.")
+    #         break
 
 
 if __name__ == "__main__":
